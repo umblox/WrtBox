@@ -112,8 +112,12 @@ class SshService {
       await file.close();
     } catch (_) {
       final encoded = base64.encode(utf8.encode(content));
-      await runCommand("echo '$encoded' | base64 -d > '$remotePath'");
+      await widgetSafeWriteFallback(remotePath, encoded);
     }
+  }
+
+  Future<void> widgetSafeWriteFallback(String remotePath, String base64Content) async {
+    await runCommand("echo '$base64Content' | base64 -d > '$remotePath'");
   }
 
   /// Ubah izin file (CHMOD)
@@ -147,10 +151,18 @@ class SshService {
       _modemForwardServer!.listen((Socket localSocket) async {
         try {
           final forward = await _client!.forwardLocal(modemIp, 80);
-          unawaited(localSocket.cast<List<int>>().pipe(forward.sink));
-          unawaited(forward.stream.cast<List<int>>().pipe(localSocket));
+          localSocket.listen(
+            (Uint8List data) => forward.sink.add(data),
+            onDone: () => forward.close(),
+            onError: (_) => forward.close(),
+          );
+          forward.stream.listen(
+            (Uint8List data) => localSocket.add(data),
+            onDone: () => localSocket.destroy(),
+            onError: (_) => localSocket.destroy(),
+          );
         } catch (_) {
-          await localSocket.close();
+          localSocket.destroy();
         }
       });
 
