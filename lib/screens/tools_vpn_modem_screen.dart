@@ -77,13 +77,11 @@ class _UniversalIpkServicesViewState extends State<_UniversalIpkServicesView> {
 
     try {
       const detectScript = r'''
-# 1. Baca semua paket luci-app-* yang terinstal dari opkg / apk
 pkgs=$(opkg list-installed 2>/dev/null | grep '^luci-app-' | awk '{print $1 " " $3}')
 if [ -z "$pkgs" ]; then
   pkgs=$(apk info -v 2>/dev/null | grep '^luci-app-')
 fi
 
-# 2. Cari menu path dari /usr/share/luci/menu.d/*.json dan /usr/lib/lua/luci/controller/
 for line in $pkgs; do
   echo "PKG|$line"
 done
@@ -131,7 +129,6 @@ done
         }
       }
 
-      // Gabungkan semua paket luci-app-* dan menu.d agar tidak ada satu pun IPK yang terlewat
       final Set<String> allKeys = {...luciPkgs, ...menuPaths.keys};
       final List<Map<String, dynamic>> apps = [];
 
@@ -140,7 +137,6 @@ done
         final pathsRaw = menuPaths[key] ?? '';
         final firstPath = pathsRaw.split(',').firstWhere((e) => e.isNotEmpty, orElse: () => '');
 
-        // Tentukan Kategori Menu (Services, Modem, VPN, Network, System) secara cerdas
         String category = 'Services';
         if (firstPath.startsWith('admin/modem') ||
             RegExp(r'modem|3ginfo|sms|atinout|hilink|mmcli').hasMatch(shortName)) {
@@ -156,7 +152,6 @@ done
           category = 'Network';
         }
 
-        // Cocokkan nama config UCI & Initscript
         String matchedUci = '';
         if (uciConfigs.contains(shortName)) {
           matchedUci = shortName;
@@ -179,7 +174,6 @@ done
           isRunning = initRunning[matchedUci] ?? false;
         }
 
-        // Tentukan URL LuCI otomatis untuk Multi-Function Opener
         final luciRoute = firstPath.isNotEmpty ? '/cgi-bin/luci/$firstPath' : '/cgi-bin/luci/admin/services/$shortName';
 
         apps.add({
@@ -208,7 +202,6 @@ done
         .join(' ');
   }
 
-  /// Satu Alat Multi-Fungsi untuk Membuka IPK Apa Pun Tanpa Setting Satu per Satu
   void _openIpkMultiTool(Map<String, dynamic> app) {
     Navigator.push(
       context,
@@ -363,7 +356,6 @@ done
   }
 }
 
-/// Layar Multi-Fungsi Pembuka Semua IPK (Tab 1: Frameless WebUI Auto-Login | Tab 2: Native UCI Editor | Tab 3: Service Control)
 class _UniversalIpkMultiOpenerScreen extends StatefulWidget {
   final SshService ssh;
   final RouterProfile profile;
@@ -382,7 +374,6 @@ class _UniversalIpkMultiOpenerScreen extends StatefulWidget {
 class _UniversalIpkMultiOpenerScreenState extends State<_UniversalIpkMultiOpenerScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _uciRawText = '';
   List<Map<String, String>> _uciOptions = [];
   String _serviceLog = '';
   bool _loadingUci = false;
@@ -400,7 +391,6 @@ class _UniversalIpkMultiOpenerScreenState extends State<_UniversalIpkMultiOpener
       final cfg = widget.appData['uciConfig'].toString();
       final shortName = widget.appData['shortName'].toString();
       if (cfg.isNotEmpty) {
-        final rawFile = await widget.ssh.readFile('/etc/config/$cfg');
         final uciLines = await widget.ssh.runCommand("uci show '$cfg' 2>/dev/null");
         final opts = <Map<String, String>>[];
         for (final line in uciLines.split('\n')) {
@@ -411,7 +401,6 @@ class _UniversalIpkMultiOpenerScreenState extends State<_UniversalIpkMultiOpener
             opts.add({'key': key, 'val': val});
           }
         }
-        _uciRawText = rawFile;
         _uciOptions = opts;
       }
       final logOut = await widget.ssh.runCommand("logread -e '$shortName' | tail -n 80");
@@ -441,7 +430,7 @@ class _UniversalIpkMultiOpenerScreenState extends State<_UniversalIpkMultiOpener
           tabs: const [
             Tab(icon: Icon(Icons.web_asset, size: 18), text: 'App Interface'),
             Tab(icon: Icon(Icons.tune, size: 18), text: 'Universal UCI Config'),
-            Tab(icon: Icon(Icons.Play_circle_outline, size: 18), text: 'Service & Log'),
+            Tab(icon: Icon(Icons.play_circle_outline, size: 18), text: 'Service & Log'),
           ],
         ),
       ),
@@ -449,16 +438,13 @@ class _UniversalIpkMultiOpenerScreenState extends State<_UniversalIpkMultiOpener
         controller: _tabController,
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          // TAB 1: Frameless In-App Web-Bridge (Otomatis Login & Sembunyikan Header/Sidebar LuCI)
           _UniversalWebBridgePage(
             ssh: widget.ssh,
             profile: widget.profile,
             title: title,
             luciPath: route,
           ),
-          // TAB 2: Generator Form UCI Otomatis Tanpa Setting Manual
           _buildUniversalUciTab(),
-          // TAB 3: Kontrol Init.d (Start/Stop/Restart) & Live Log IPK
           _buildServiceControlTab(initName),
         ],
       ),
@@ -619,7 +605,6 @@ class _UniversalIpkMultiOpenerScreenState extends State<_UniversalIpkMultiOpener
   }
 }
 
-/// Komponen Frameless Web-App Bridge: Otomatis Login ke LuCI & Memotong Header/Menu Samping agar Tampil Native
 class _UniversalWebBridgePage extends StatefulWidget {
   final SshService ssh;
   final RouterProfile profile;
@@ -629,6 +614,7 @@ class _UniversalWebBridgePage extends StatefulWidget {
   final String? directUrl;
 
   const _UniversalWebBridgePage({
+    super.key,
     required this.ssh,
     required this.profile,
     required this.title,
@@ -677,7 +663,6 @@ class _UniversalWebBridgePageState extends State<_UniversalWebBridgePage> {
     final user = widget.profile.username.replaceAll("'", "\\'");
     final pass = widget.profile.password.replaceAll("'", "\\'");
 
-    // Otomatis isi form login LuCI jika halaman meminta autentikasi + sembunyikan navbar/sidebar LuCI jika Frameless aktif
     final js = '''
 (function() {
   var userField = document.querySelector('input[name="luci_username"]');
@@ -1067,7 +1052,6 @@ class _VisualSpeedtestViewState extends State<_VisualSpeedtestView> {
   String _stageText = 'Siap menjalankan Speedtest langsung dari router OpenWrt';
   double _currentGaugeMbps = 0.0;
   double _pingMs = 0.0;
-  double _jitterMs = 0.0;
   double _downloadMbps = 0.0;
   double _uploadMbps = 0.0;
   String _ispInfo = '-';
@@ -1094,15 +1078,13 @@ else echo "curl-cloudflare (Built-in Fallback)"; fi
     setState(() {
       _running = true;
       _pingMs = 0;
-      _jitterMs = 0;
       _downloadMbps = 0;
       _uploadMbps = 0;
       _currentGaugeMbps = 0;
-      _stageText = 'Mengukur Ping, Jitter & IP Publik ISP...';
+      _stageText = 'Mengukur Ping & IP Publik ISP...';
     });
 
     try {
-      // Ambil info ISP & IP Publik dari router
       final ipJson = await widget.ssh.runCommand('curl -s --max-time 6 https://ipinfo.io/json');
       try {
         final map = json.decode(ipJson);
@@ -1117,13 +1099,10 @@ else echo "curl-cloudflare (Built-in Fallback)"; fi
         if (out.isNotEmpty && out.startsWith('{')) {
           final data = json.decode(out);
           final ping = (data['ping']?['latency'] ?? 0).toDouble();
-          final jitter = (data['ping']?['jitter'] ?? 0).toDouble();
-          // Ookla JSON bandwidth adalah bytes per second -> dikali 8 / 1,000,000 untuk Mbps
           final dl = ((data['download']?['bandwidth'] ?? 0) * 8 / 1000000).toDouble();
           final ul = ((data['upload']?['bandwidth'] ?? 0) * 8 / 1000000).toDouble();
           setState(() {
             _pingMs = ping;
-            _jitterMs = jitter;
             _downloadMbps = dl;
             _uploadMbps = ul;
             _currentGaugeMbps = dl;
@@ -1156,7 +1135,6 @@ else echo "curl-cloudflare (Built-in Fallback)"; fi
         }
       }
 
-      // Fallback Universal: Uji Ping + Kecepatan Download & Upload via Cloudflare Speed Server langsung dari router
       final pingRaw = await widget.ssh.runCommand(
         "ping -c 4 1.1.1.1 2>/dev/null | tail -n 1 | awk -F '/' '{print \$5}'",
       );
@@ -1212,11 +1190,16 @@ else echo "curl-cloudflare (Built-in Fallback)"; fi
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Engine: $_detectedBinary', style: const TextStyle(fontSize: 12, color: Colors.lightBlueAccent)),
-                    Text(_ispInfo, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                    Flexible(
+                      child: Text(
+                        _ispInfo,
+                        style: const TextStyle(fontSize: 11, color: Colors.white70),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                // Speedometer Gauge Visual
                 SizedBox(
                   width: 220,
                   height: 135,
