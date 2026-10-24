@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models/router_profile.dart';
 import 'services/ssh_service.dart';
@@ -11,6 +12,12 @@ import 'screens/tools_vpn_modem_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      systemNavigationBarColor: Color(0xFF12161F),
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
   runApp(const WrtBoxApp());
 }
 
@@ -264,57 +271,61 @@ class _RouterListScreenState extends State<RouterListScreen> {
           ),
         ],
       ),
-      body: _isConnecting
-          ? const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Menghubungkan jalur SSH & ubus ke OpenWrt...'),
-                ],
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: _isConnecting
+            ? const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Menghubungkan jalur SSH & ubus ke OpenWrt...'),
+                  ],
+                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
+                itemCount: _profiles.length,
+                itemBuilder: (ctx, i) {
+                  final p = _profiles[i];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      leading: const CircleAvatar(
+                        backgroundColor: Color(0xFF0088CC),
+                        child: Icon(Icons.router, color: Colors.white),
+                      ),
+                      title: Text(
+                        p.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        '${p.host}:${p.sshPort} (${p.connectionBadge}) • Modem: ${p.modemIp}',
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 20),
+                            onPressed: () => _showDeviceDialog(existing: p),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                            onPressed: () {
+                              setState(() => _profiles.removeAt(i));
+                              _saveProfiles();
+                            },
+                          ),
+                        ],
+                      ),
+                      onTap: () => _connectToRouter(p),
+                    ),
+                  );
+                },
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: _profiles.length,
-              itemBuilder: (ctx, i) {
-                final p = _profiles[i];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0xFF0088CC),
-                      child: Icon(Icons.router, color: Colors.white),
-                    ),
-                    title: Text(
-                      p.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      '${p.host}:${p.sshPort} (${p.connectionBadge}) • Modem: ${p.modemIp}',
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit, size: 20),
-                          onPressed: () => _showDeviceDialog(existing: p),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
-                          onPressed: () {
-                            setState(() => _profiles.removeAt(i));
-                            _saveProfiles();
-                          },
-                        ),
-                      ],
-                    ),
-                    onTap: () => _connectToRouter(p),
-                  ),
-                );
-              },
-            ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showDeviceDialog(),
         icon: const Icon(Icons.add),
@@ -324,7 +335,7 @@ class _RouterListScreenState extends State<RouterListScreen> {
   }
 }
 
-/// Kerangka Navigasi Utama setelah terhubung ke Router (Gaya LuCI Alpha + Shortcut Atas)
+/// Kerangka Navigasi Utama (Otomatis Menyesuaikan Navigasi Bawah HP via SafeArea)
 class MainDashboardShell extends StatefulWidget {
   final SshService ssh;
   final RouterProfile profile;
@@ -422,10 +433,10 @@ class _MainDashboardShellState extends State<MainDashboardShell> {
             ),
           ),
           child: SafeArea(
+            bottom: false,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Baris Ikon Shortcut Atas (Persis Screenshot: Menu, Clash, Neko/Nikki, Terminal, TinyFM, NetMon, System)
                 SizedBox(
                   height: 48,
                   child: Row(
@@ -438,12 +449,12 @@ class _MainDashboardShellState extends State<MainDashboardShell> {
                       ),
                       _topShortcutButton(
                         icon: Icons.pets,
-                        tooltip: 'OpenClash / Mihomo',
+                        tooltip: 'Services / IPK Terinstal',
                         onTap: () => _selectMenu('services_ipk', 'Services • All IPK'),
                       ),
                       _topShortcutButton(
                         icon: Icons.hub,
-                        tooltip: 'Nikki / Neko / Tunnel',
+                        tooltip: 'VPN & Tunnel',
                         onTap: () => _selectMenu('vpn_cloudflared', 'VPN & Tunnel'),
                       ),
                       _topShortcutButton(
@@ -481,7 +492,6 @@ class _MainDashboardShellState extends State<MainDashboardShell> {
                     ],
                   ),
                 ),
-                // Sub-bar Link Cepat: About | Modem | Terminal | Yacd | Speedtest
                 Container(
                   height: 32,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -507,7 +517,12 @@ class _MainDashboardShellState extends State<MainDashboardShell> {
         ),
       ),
       drawer: _buildAlphaDrawer(),
-      body: _buildBody(),
+      // SafeArea(bottom: true) memastikan seluruh isi layar berhenti tepat di atas tombol navigasi HP
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: _buildBody(),
+      ),
     );
   }
 
