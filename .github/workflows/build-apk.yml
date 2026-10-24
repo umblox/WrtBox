@@ -58,6 +58,7 @@ jobs:
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle
           sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
           sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle
+          sed -i 's/ndkVersion = flutter.ndkVersion/ndkVersion = "26.1.10909125"/g' android/app/build.gradle
 
       - name: Install Dependencies
         run: flutter pub get
