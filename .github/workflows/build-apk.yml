@@ -1,9 +1,12 @@
-name: Build OpenWrt Manager APK
+name: Build & Release WrtBox APK
 
 on:
   push:
     branches: [ "main", "master" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -27,47 +30,64 @@ jobs:
 
       - name: Generate Android Platform Files
         run: |
-          # Backup file pubspec.yaml dan folder lib kita
           cp pubspec.yaml pubspec.yaml.bak
           cp -r lib lib_bak
 
-          # Generate kerangka project Android otomatis
           flutter create --org id.openwrt.wrtbox --project-name wrtbox --platforms=android .
 
-          # Kembalikan file kode aplikasi kita
           mv pubspec.yaml.bak pubspec.yaml
           rm -rf lib test
           mv lib_bak lib
 
-      - name: Upgrade Android Gradle Plugin (AGP 8.5.2), SDK 35 & Manifest
+      - name: Upgrade AGP 8.5.2, Fix NDK 26, SDK 35 & Manifest
         run: |
-          # 1. Tambahkan izin Internet & Cleartext HTTP di AndroidManifest.xml
+          # 1. Izin Internet & HTTP Cleartext di AndroidManifest.xml
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/><application android:usesCleartextTraffic="true"/g' "$MANIFEST"
 
-          # 2. Naikkan Gradle Wrapper ke 8.7 (agar mendukung AGP 8.5.2)
+          # 2. Naikkan Gradle Wrapper ke 8.7
           sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.7-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
 
-          # 3. Naikkan AGP dari 8.1.0 ke 8.5.2 & Kotlin ke 1.9.24 di settings.gradle
+          # 3. Naikkan AGP ke 8.5.2 & Kotlin ke 1.9.24
           sed -i 's/id "com.android.application" version "[0-9.]*"/id "com.android.application" version "8.5.2"/g' android/settings.gradle
           sed -i 's/id "org.jetbrains.kotlin.android" version "[0-9.]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/g' android/settings.gradle
 
-          # 4. Set compileSdk = 35 dan minSdk = 21 di android/app/build.gradle
+          # 4. Set compileSdk 35, minSdk 21, targetSdk 35, dan Fix NDK 26.1.10909125
           sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle
           sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle
           sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
           sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle
           sed -i 's/ndkVersion = flutter.ndkVersion/ndkVersion = "26.1.10909125"/g' android/app/build.gradle
+          sed -i 's/ndkVersion flutter.ndkVersion/ndkVersion "26.1.10909125"/g' android/app/build.gradle
 
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build Release APK
-        run: flutter build apk --release --no-tree-shake-icons
+      - name: Build Split-per-ABI & Universal Release APK
+        run: |
+          flutter build apk --release --split-per-abi --no-tree-shake-icons
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/WrtBox-arm64-v8a.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/WrtBox-armeabi-v7a.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/WrtBox-x86_64.apk
 
-      - name: Upload APK Artifact
+      - name: Upload Split APKs to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: WrtBox-OpenWrt-Manager-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: WrtBox-Split-ABI-APKs
+          path: dist/*.apk
+
+      - name: Publish APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: "WrtBox v1.0.${{ github.run_number }} (Split ABI Release)"
+          body: |
+            ### 📦 Unduh APK Sesuai Perangkat HP Anda:
+            * **`WrtBox-arm64-v8a.apk`** — *(Direkomendasikan untuk hampir semua HP Android modern 64-bit, ukuran paling ringan ~8 MB)*
+            * **`WrtBox-armeabi-v7a.apk`** — *(Untuk HP Android lawas 32-bit)*
+            * **`WrtBox-x86_64.apk`** — *(Untuk Emulator PC / Android x86)*
+          files: dist/*.apk
+          draft: false
+          prerelease: false
