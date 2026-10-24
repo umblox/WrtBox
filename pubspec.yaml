@@ -1,0 +1,21 @@
+name: wrtbox
+description: Native OpenWrt Interface App (Winbox & DaRemote Style)
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dartssh2: ^2.9.0
+  xterm: ^4.0.0
+  shared_preferences: ^2.3.2
+  webview_flutter: ^4.9.0
+  file_picker: ^8.1.2
+  http: ^1.2.2
+
+flutter:
+  uses-material-design: true
+  
