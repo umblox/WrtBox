@@ -22,27 +22,31 @@ jobs:
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.3'
+          flutter-version: '3.27.4'
           channel: 'stable'
 
       - name: Generate Android Platform Files
         run: |
-          # Backup file pubspec.yaml dan folder lib kita
           cp pubspec.yaml pubspec.yaml.bak
           cp -r lib lib_bak
 
-          # Generate kerangka project Android otomatis
           flutter create --org id.openwrt.wrtbox --project-name wrtbox --platforms=android .
 
-          # Kembalikan file kode aplikasi kita
           mv pubspec.yaml.bak pubspec.yaml
-          rm -rf lib
+          rm -rf lib test
           mv lib_bak lib
 
-      - name: Inject Android Manifest Permissions (Internet & Cleartext HTTP)
+      - name: Configure Android Manifest & Gradle SDK 35
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/><application android:usesCleartextTraffic="true"/g' "$MANIFEST"
+
+          if [ -f "android/app/build.gradle" ]; then
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle
+            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
+          fi
 
       - name: Install Dependencies
         run: flutter pub get
