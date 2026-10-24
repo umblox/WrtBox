@@ -22,31 +22,42 @@ jobs:
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.4'
+          flutter-version: '3.24.3'
           channel: 'stable'
 
       - name: Generate Android Platform Files
         run: |
+          # Backup file pubspec.yaml dan folder lib kita
           cp pubspec.yaml pubspec.yaml.bak
           cp -r lib lib_bak
 
+          # Generate kerangka project Android otomatis
           flutter create --org id.openwrt.wrtbox --project-name wrtbox --platforms=android .
 
+          # Kembalikan file kode aplikasi kita
           mv pubspec.yaml.bak pubspec.yaml
           rm -rf lib test
           mv lib_bak lib
 
-      - name: Configure Android Manifest & Gradle SDK 35
+      - name: Upgrade Android Gradle Plugin (AGP 8.5.2), SDK 35 & Manifest
         run: |
+          # 1. Tambahkan izin Internet & Cleartext HTTP di AndroidManifest.xml
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/><application android:usesCleartextTraffic="true"/g' "$MANIFEST"
 
-          if [ -f "android/app/build.gradle" ]; then
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle
-            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle
-            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
-          fi
+          # 2. Naikkan Gradle Wrapper ke 8.7 (agar mendukung AGP 8.5.2)
+          sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.7-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+
+          # 3. Naikkan AGP dari 8.1.0 ke 8.5.2 & Kotlin ke 1.9.24 di settings.gradle
+          sed -i 's/id "com.android.application" version "[0-9.]*"/id "com.android.application" version "8.5.2"/g' android/settings.gradle
+          sed -i 's/id "org.jetbrains.kotlin.android" version "[0-9.]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/g' android/settings.gradle
+
+          # 4. Set compileSdk = 35 dan minSdk = 21 di android/app/build.gradle
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
+          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle
 
       - name: Install Dependencies
         run: flutter pub get
