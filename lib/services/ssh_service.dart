@@ -56,6 +56,21 @@ class SshService {
     return utf8.decode(result, allowMalformed: true).trim();
   }
 
+  /// Eksekusi perintah shell secara streaming (Real-Time baris demi baris untuk Live Speedtest)
+  Stream<String> runCommandStream(String command) async* {
+    if (!isConnected) {
+      if (currentProfile != null) {
+        await connect(currentProfile!);
+      } else {
+        throw Exception('Belum terhubung ke router OpenWrt.');
+      }
+    }
+    final session = await _client!.execute(command);
+    await for (final chunk in session.stdout) {
+      yield utf8.decode(chunk, allowMalformed: true);
+    }
+  }
+
   /// Panggil ubus dan parse hasilnya sebagai Map/List JSON
   Future<dynamic> ubusCall(String path, String method, [Map<String, dynamic>? args]) async {
     final argStr = args != null ? "'${json.encode(args)}'" : "'{}'";
